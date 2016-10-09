@@ -1,0 +1,30 @@
+{
+  "countries": ["us","uk","ca","de","se","it","fr"],
+  "years": [2005,2006,2007,2008,2009,2010,2011,2012,2013,2014,2015],
+  "columns": [
+    "page", "new", "name", "description",
+    "price", "quantity", "dim1", "dim2", "dim3", "unit", "color",
+    "ikeaid",
+    "other-measurement-1", "other-unit-1",
+    "other-measurement-2", "other-unit-2",
+    "other-measurement-3", "other-unit-3",
+    "other-measurement-4", "other-unit-4",
+    "comments", "exceptions"
+  ],
+  "dimensions": [
+    "country", "year",
+    "page", "new", "name", "description",
+    "price", "quantity", "dim1", "dim2", "dim3", "unit", "color",
+    "ikeaid",
+    "other-measurement-1", "other-unit-1",
+    "other-measurement-2", "other-unit-2",
+    "other-measurement-3", "other-unit-3",
+    "other-measurement-4", "other-unit-4",
+    "comments", "exceptions"
+  ],
+  "translations": {
+    "quantity": [
+
+    ]
+  }
+}
