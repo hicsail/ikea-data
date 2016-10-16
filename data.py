@@ -106,6 +106,10 @@ def json_file_to_xlsx_file(json_file, xlsx_file):
     xl_bold = xl_workbook.add_format({'bold': True})
     xl_sheet = xl_workbook.add_worksheet("data")
 
+    # Set the column widths.
+    for (i,w) in zip(range(0,11), [2,5,10,25,18,8,4,4.5,5.5,6.5,8]):
+        xl_sheet.set_column(i, i, w)
+
     # Add the column headers.
     for i in range(0,len(CONFIG['dimensions'])):
         xl_sheet.write(0, i, CONFIG['dimensions'][i], xl_bold)
@@ -116,17 +120,170 @@ def json_file_to_xlsx_file(json_file, xlsx_file):
         for j in range(0,len(CONFIG['dimensions'])):
             dimension = CONFIG['dimensions'][j]
             xl_sheet.write(i+1, j, entry.get(dimension))
+
+        # Progress counter.
         if i > 0 and i % 5000 == 0:
             print("...wrote " + str(i) + "/" + str(len(entries)) + " entries;")
 
     xl_workbook.close()
     print("...finished writing file '" + xlsx_file + "'.\n")
 
+def projection_product_unit_quantity(entry):
+    PULS = CONFIG['translations']['product_unit_labels']
+    quantity = entry.get("quantity")
+    if quantity is None:
+        return
+
+    # If we already have a numeric quantity representation, use it.
+    if type(quantity) == int or type(quantity) == float:
+        entry["pieces"] = quantity
+        return
+
+    # Obtain any labels and numeric literals found in the quantity string.
+    label = re.sub(r'(\s*)[0-9]+(\s*)', '', quantity) # Quantity label (ignoring numeric quantity).
+    numerals = re.search(r'(\s*)[0-9]+(\s*)', quantity) # Numeric quantity, if present.
+
+    if numerals:
+        if quantity == str(int(numerals.group())): entry["pieces"] = int(numerals.group())
+        elif quantity == "m2": entry["sqr_m"] = 1
+        elif label in (PULS['piece'] + PULS['pieces']): entry["pieces"] = int(numerals.group())
+        elif label in PULS['pairs']: entry["pieces"] = 2*int(numerals.group())
+        elif label in PULS['grams']: entry["grams"] = int(numerals.group())
+        elif label in PULS['linear_meters']: entry["lin_m"] = int(numerals.group())
+        #else: print(quantity, label)
+    else:
+        if label in PULS['piece']: entry["pieces"] = 1
+        elif label in PULS['two']: entry["pieces"] = 2
+        elif label in PULS['six']: entry["pieces"] = 6
+        elif quantity in PULS['linear_meters']: entry["lin_m"] = 1
+        elif quantity in PULS['linear_feet']: entry["lin_m"] = 0.3048
+        elif quantity in PULS['linear_yards']: entry["lin_m"] = 0.9144
+        elif quantity in PULS['square_meters']: entry["sqr_m"] = 1
+        elif quantity in PULS['square_feet']: entry["sqr_m"] = 0.092903
+        elif quantity in PULS['collection']: entry["collection"] = True
+        #else: print(quantity, label)
+
+def projection_geometry_dimension(dimension_column, unit_column, entry):
+    '''
+    Extract labelled dimension measurement information from a
+    given combination of a dimension column and a unit
+    column.
+    '''
+
+    # Build lookup table for translating dimension labels.
+    DIMS = {TXT:DIM for (DIM, LBLS) in CONFIG['translations']['dimension_labels'].items() for TXT in LBLS}
+
+    # Obtain the unit column text.
+    unit = entry.get(unit_column)
+    if unit is not None:
+        unit = unit.replace('`','').lower().strip() # Fix typos.
+
+    # Retrieve the dimension column value.
+    dimension = entry.get(dimension_column)
+    if dimension is not None and type(dimension) == str:
+        dimension = dimension.replace('`','').lower().strip() # Typos.
+    if dimension is None or type(dimension) == int or type(dimension) == float:
+        return None
+
+    # Retrieve the numeric and dimension information from the column.
+    dimension = dimension.replace('"','').replace(',','.')
+    dim_ftin = re.search(r'([0-9]+)\'([0-9]+)', dimension)
+    dim_ft = re.search(r'([0-9]+)\'', dimension)
+    dim_dec = re.search(r'([0-9]+)\.([0-9]+)', dimension)
+    dim_mixed = re.search(r'([0-9]+)(\s)([0-9]+)/([0-9]+)', dimension)
+    dim_frac = re.search(r'([0-9]+)/([0-9]+)', dimension)
+    dim_int = re.search(r'([0-9]+)', dimension)
+    dim_label = dimension
+    dim_label = re.sub(r'(\s*)([0-9]+)\.([0-9]+)(\s*)', '', dim_label)
+    dim_label = re.sub(r'(\s*)([0-9]+)\'([0-9]+)(\s*)', '', dim_label)
+    dim_label = re.sub(r'(\s*)([0-9]+)\'(\s*)', '', dim_label)
+    dim_label = re.sub(r'(\s*)([0-9]+)/([0-9]+)(\s*)', '', dim_label)
+    dim_label = re.sub(r'(\s*)[0-9]+(\s*)', '', dim_label).strip().lower()
+    if dim_ftin and dim_label in DIMS:
+        (feet, inches) = dim_ftin.group().split("'")
+        entry[DIMS[dim_label]] = (float(feet)*30.48) + (float(inches)*2.54)
+    elif dim_ft and dim_label in DIMS:
+        entry[DIMS[dim_label]] = (float(dim_ft.group()[0:-1])*30.48)
+    elif dim_mixed and (unit in ["in","po"]) and dim_label in DIMS:
+        (term, frac) = dim_mixed.group().split(" ")
+        (nom, den) = frac.split("/")
+        entry[DIMS[dim_label]] = ((float(term)*2.54) + (float(nom)*2.54 / float(den)))
+    elif dim_frac and (unit in ["in","po"]) and dim_label in DIMS:
+        (nom, den) = dim_frac.group().split("/")
+        entry[DIMS[dim_label]] = float(nom)*2.54 / float(den)
+    elif dim_int and (unit in ["in","po"]) and dim_label in DIMS:
+        entry[DIMS[dim_label]] = float(dim_int.group())*2.54
+    elif dim_int and unit == "cm" and dim_label in DIMS:
+        entry[DIMS[dim_label]] = float(dim_int.group())
+    elif dim_int and unit == "mm" and dim_label in DIMS:
+        entry[DIMS[dim_label]] = float(dim_int.group()) / 10
+    elif dim_int and unit == "m" and dim_label in DIMS:
+        entry[DIMS[dim_label]] = float(dim_int.group()) * 100
+    elif dim_int and unit == "ft" and dim_label in DIMS:
+        entry[DIMS[dim_label]] = float(dim_int.group()) * 30.48
+    elif dim_dec and unit == "cm" and dim_label in DIMS:
+        entry[DIMS[dim_label]] = float(dim_frac.group())
+    elif dim_dec and unit == "ft" and dim_label in DIMS:
+        entry[DIMS[dim_label]] = float(dim_frac.group())
+    elif unit is None or\
+         dim_label == "" or\
+         (not dim_int) or\
+         len({'x','/','-','+'} & set(dim_label)) > 0: # Ignore for now.
+        pass
+    else:
+        pass #print(dimension + " :: " + str(unit) + " :: " + str(dim_label) + " :: " + str(dim_label in DIMS) + ".")
+
+def projection_geometry(entry):
+    # Process every "default" dimension column.
+    for dimension_column in ["dim" + str(i) for i in range(1,4)]:
+        projection_geometry_dimension(dimension_column, "unit", entry)
+
+    # Process the "other measurement" columns.
+    ou1 = entry.get("other-unit-1")
+    if ou1 == "diameter in":
+        entry["other-measurement-1"] = str(entry.get("other-measurement-1")) + " diameter"
+        entry["other-unit-1"] = "in"
+        projection_geometry_dimension("other-measurement-1", "other-unit-1", entry)
+    comments = entry.get("comments")
+    if comments in CONFIG['translations']['comments']['thickness']:
+        if entry.get("other-unit-1") != "diameter cm": # Filter out mistakes.
+            entry["other-measurement-1"] = str(entry.get("other-measurement-1")) + " thick"
+            projection_geometry_dimension("other-measurement-1", "other-unit-1", entry)
+
+def projections_add(input, output):
+    print("Projecting data in file '" + input + "' to file '" + output + "'...")
+    d = json.loads(open(input, 'r').read())
+    entries = d['entries']
+    for i in range(len(entries)):
+        entry = entries[i]
+        
+        # Remove any entries that do not have any data.
+        for column in CONFIG['columns']:
+            if entry.get(column) == "n/a": 
+                del entry[column]
+
+        # Adjust data representations and one-off errors.
+        if entry.get("quantity") == 0: entry["quantity"] = 1
+        if entry.get("new") is not None: entry["new"] = (entry["new"] > 0)
+        if entry.get("exceptions") == "no printed page number, keyed PDF page number": entry["exceptions"] = "PDF pg #"
+
+        # Perform projections.
+        projection_product_unit_quantity(entry)
+        projection_geometry(entry)
+
+        # Progress counter.
+        if i > 0 and i % 5000 == 0:
+            print("...processed " + str(i) + "/" + str(len(entries)) + " entries;")
+
+    open(output, 'w').write(json.dumps(d, sort_keys=True, indent=2)) # Human-legible.
+    print("...finished writing file '" + output + "'.\n")
+
 # Examples of calls to functions in this module.
 # It is assumed that the IKEA data sets are under the
 # "data/" subdirectory path.
 #xlsx_files_to_json_file('data/', 'data.json', True)
 #xlsx_files_to_json_file('data/', 'data.json', True, ['us'], [2005])
-#json_file_to_xlsx_file('data.json', 'ikea-data.xlsx')
+#projections_add("data.json", "projected.json")
+#json_file_to_xlsx_file('projected.json', 'ikea-data.xlsx')
 
 #eof

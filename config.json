@@ -12,17 +12,34 @@
     "comments", "exceptions"
   ],
   "dimensions": [
-    "country", "year",
-    "page", "new", "name", "description",
-    "price", "quantity", "dim1", "dim2", "dim3", "unit", "color",
-    "ikeaid",
+    "country", "year", "ikeaid", "name", "description", "price",
+    "pieces", "collection", "grams", "lin_m", "sqr_m",
+    "wid_cm", "len_cm", "hgt_cm", "dep_cm", "thk_cm", "dia_cm",
+    "quantity", "dim1", "dim2", "dim3", "unit", "color",
     "other-measurement-1", "other-unit-1",
     "other-measurement-2", "other-unit-2",
     "other-measurement-3", "other-unit-3",
     "other-measurement-4", "other-unit-4",
-    "comments", "exceptions"
+    "page", "new", "comments", "exceptions"
   ],
   "translations": {
+    "dimension_labels": {
+        "wid_cm": ["w", "i", "b", "breit",  "bbreite",  "briete", "breite", "bredd", "breed", "bred", "dredd", "larg.", "larg", "large", "largh", "largo"],
+        "len_cm": ["l", "l.", "ll", "langd", "lang", "lange", "lung", "lungo", "lungh", "lunghezza"],
+        "dep_cm": ["d", "dd", "tief", "teife", "tiefe", "t", "djup", "djupa", "p", "profond", "pro", "prof", "prof.", "proof", "peof"],
+        "hgt_cm": ["h", "hh", "hoch", "h hoch", "hcm","loch", "och", "hojd", "hohe", "hohen", "houh", "alte", "altezza", "hau", "hhaut", "haut"],
+        "thk_cm": ["thick", "hthick", "hart", "stark", "starke", "tjock", "epaisseur"],
+        "dia_cm": ["diameter"]
+    },
+    "comments": {
+        "thickness": {
+            "other measurement is for thickness": "thk_cm",
+            "other measurement is for stark": "thk_cm",
+            "other measurement is for spessore": "thk_cm",
+            "other measurement is for epais": "thk_cm",
+            "other measurement is for tjock": "thk_cm"
+        }
+    },
     "product_unit_labels": {
        "linear_meters": ["m", "le m"],
        "linear_yards": ["yd"],
@@ -30,7 +47,8 @@
        "square_meters": ["m2"],
        "square_feet": ["sq ft", "sq. ft.", "sq.ft.", "pi ca", "le pi ca"],
        "grams": ["g"],
-       "multiple": [
+       "piece": ["pt", "pp", "p", "pz", "pz.", "pc", "pce", "st", "ch", "each", "ea", "ea.", "l'une", "individual", "enkelt"],
+       "pieces": [
          "p", "-p", "pcs", "pcs.", "pcs/ea", "pcs ea", "pce", "pieces", "piece", "pces", "pezzi", "stuck", "tlg", "-tig", "-tlg", "delar",
          "enspcs", "pcs each", "lespces", "lespieces",
          "pz con contenitore",
@@ -42,13 +60,14 @@
          "les",
          "individual",  "l'une",
          "elements",
-         "schols", "schals", "sheets",
+         "schols", "schals", "sheets", "teli",
          "stanglar", "spar",
          "shelf", "regal",
          "panels", "planche",
-         "plate", "piatto"
+         "plate", "piatto",
+         "perbottiglie"
        ],
-       "multiple_pair": ["pair", "pairs", "paires", "paar", "coppie", "par"],
+       "pairs": ["pair", "pairs", "paires", "paar", "coppie", "par"],
        "two": ["pair", "par", "paire", "pr", "la paire", "paar", "set of two", "two curtain panels", "pair of curtains"],
        "six": ["set of six"],
        "collection": [
