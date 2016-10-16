@@ -23,8 +23,41 @@
     "comments", "exceptions"
   ],
   "translations": {
-    "quantity": [
-
-    ]
+    "product_unit_labels": {
+       "linear_meters": ["m", "le m"],
+       "linear_yards": ["yd"],
+       "linear_feet": ["lin ft", "lin.ft", "lin. ft.", "liner ft", "lin.ft.", "linear foot", "pi lineaire"],
+       "square_meters": ["m2"],
+       "square_feet": ["sq ft", "sq. ft.", "sq.ft.", "pi ca", "le pi ca"],
+       "grams": ["g"],
+       "multiple": [
+         "p", "-p", "pcs", "pcs.", "pcs/ea", "pcs ea", "pce", "pieces", "piece", "pces", "pezzi", "stuck", "tlg", "-tig", "-tlg", "delar",
+         "enspcs", "pcs each", "lespces", "lespieces",
+         "pz con contenitore",
+         "piece set", "pc set", "-piece set", "setpezzi", "setpz", "jeupcs", "set-tlg",
+         "set om", "et om", "set of", "set di", "set", "jeu de",
+         "lot de", "lot depcs", "lot", "lotpcs", "lot depc",
+         "pk", "-pk", "pack", "-pack", "pack of", "pk/ea",
+         "each", "chacune des", "chacun des",
+         "les",
+         "individual",  "l'une",
+         "elements",
+         "schols", "schals", "sheets",
+         "stanglar", "spar",
+         "shelf", "regal",
+         "panels", "planche",
+         "plate", "piatto"
+       ],
+       "multiple_pair": ["pair", "pairs", "paires", "paar", "coppie", "par"],
+       "two": ["pair", "par", "paire", "pr", "la paire", "paar", "set of two", "two curtain panels", "pair of curtains"],
+       "six": ["set of six"],
+       "collection": [
+         "set", "jeu",
+         "combination", "combinaison", "denna kombination", "combinazione", "each combination", "this combination",
+         "ens", "l'ens", "ensemble",
+         "lot",
+         "portion", "paket", "pk"
+       ]
+    }
   }
 }
