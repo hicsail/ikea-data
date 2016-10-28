@@ -26,10 +26,7 @@ def set_or_update_op(d, k, op, val):
     '''
     Sets or updates an entry with an operator.
     '''
-    if k not in d:
-        d[k] = val
-    else:
-        d[k] = op(d[k], val)
+    d[k] = val if k not in d else op(d[k], val)
 
 def str_ascii_only(s):
     '''
@@ -338,7 +335,7 @@ def projections_add(input, output):
 # "data/" subdirectory path.
 #xlsx_files_to_json_file('data/', 'data.json', True)
 #xlsx_files_to_json_file('data/', 'data.json', True, ['us'], [2005])
-projections_add("data.json", "projected.json")
+#projections_add("data.json", "projected.json")
 #json_file_to_xlsx_file('projected.json', 'ikea-data.xlsx')
 
 #eof
