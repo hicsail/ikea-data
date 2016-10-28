@@ -15,10 +15,21 @@ import xlrd.sheet
 import xlsxwriter
 import re
 
+from measurements import Measurement, Assortment
+
 ###############################################################################
 ##
 
 CONFIG = json.loads(open('config.json').read()) # For conversion/translation.
+
+def set_or_update_op(d, k, op, val):
+    '''
+    Sets or updates an entry with an operator.
+    '''
+    if k not in d:
+        d[k] = val
+    else:
+        d[k] = op(d[k], val)
 
 def str_ascii_only(s):
     '''
@@ -163,78 +174,122 @@ def projection_product_unit_quantity(entry):
         elif quantity in PULS['collection']: entry["collection"] = True
         #else: print(quantity, label)
 
+def project_geometry_dimension_matches(dimension):
+    '''
+    Retrieve all numeric values from a string that
+    match one of the specified formats. Finds each
+    longest match from left to right.
+    '''
+    patterns = [\
+        ('prime_double_prime', r'([0-9]+)\'(\s*)([0-9]+)(\")?'),
+        ('prime', r'([0-9]+)\''),
+        ('decimal_mixed', r'([0-9]+)\.([0-9]+)(\s)([0-9]+)/(2|4|6|8)(\s|$|-|x|\+|/)'),
+        ('mixed', r'([0-9]+)(\s)([0-9]+)/(2|4|6|8)(\s|$|-|x|\+|/)'),
+        ('fraction', r'([0-9]+)/(2|4|6|8)(\s|$|-|x|\+|/)'),
+        ('decimal', r'([0-9]+)\.([0-9]+)'),
+        ('integer', r'([0-9]+)')
+      ]
+
+    # Keep finding matches left-to-right until there are no more.
+    suffix = dimension
+    assortment = Assortment()
+    match = True
+    while match:
+        # Find the longest match.
+        match = None
+        length = 0
+        for (notation, regexp) in patterns:
+            result = re.search(regexp, suffix)
+            if result:
+                raw = result.group()
+                raw = raw[:-1] if raw[-1] in "-x+/" else raw
+                if result and len(raw) > length:
+                    length = len(raw)
+                    match = [Measurement(raw, notation), result.span()[1]]
+        if match is not None:
+            assortment.add(match[0])
+            suffix = suffix[match[1]:]
+
+    return assortment
+
 def projection_geometry_dimension(dimension_column, unit_column, entry):
     '''
     Extract labelled dimension measurement information from a
     given combination of a dimension column and a unit
     column.
     '''
-
     # Build lookup table for translating dimension labels.
     DIMS = {TXT:DIM for (DIM, LBLS) in CONFIG['translations']['dimension_labels'].items() for TXT in LBLS}
 
-    # Obtain the unit column text.
-    unit = entry.get(unit_column)
-    if unit is not None:
-        unit = unit.replace('`','').lower().strip() # Fix typos.
-
-    # Retrieve the dimension column value.
+    # Retrieve the dimension column value, fix typos, and
+    # perform some formatting normalizations.
     dimension = entry.get(dimension_column)
-    if dimension is not None and type(dimension) == str:
-        dimension = dimension.replace('`','').lower().strip() # Typos.
-    if dimension is None or type(dimension) == int or type(dimension) == float:
+    if dimension is None or dimension == "":
         return None
+    if type(dimension) == int or type(dimension) == float:
+        dimension = str(dimension)
+    if type(dimension) == str:
+        dimension = dimension.replace('`','')
+        dimension = dimension.replace('h263/4', 'h26 3/4')\
+                             .replace('h551/8', 'h55 1/8')\
+                             .replace("l9' 10'", "l9'-10'")\
+                             .replace("44. 5/62", "44 5/62")\
+                             .replace("l220, l56.5", "l220-l56.5")
+        dimension = dimension.lower().strip()
+        dimension = dimension[:-1] if dimension[-1] == '.' else dimension
+
+        # Adjust for comma instead of decimal point in some cases.
+        if entry['country'] in {'de','se','it','fr'} and dimension.count(',') == 1:
+            dimension = dimension.replace(',','.')
+
+        # Adjust for comma instead of separator in some cases.
+        if entry['country'] in {'ca','fr'} and dimension.count(',') in {1,2}:
+            dimension = dimension.replace(',','-')
+
+    # Clear out all numeric information from the dimension string
+    # (leaving only the label, if one is present).
+    dim_label = dimension
+    dim_label = re.sub(r'(\s*)([0-9]+)\'(\s*)([0-9]+)(\")?(\s*)', '', dim_label)
+    dim_label = re.sub(r'(\s*)([0-9]+)\'(\s*)', '', dim_label)
+    dim_label = re.sub(r'(\s*)([0-9]+)\.([0-9]+)(\s)([0-9]+)/(2|4|6|8)(\s|$|-|x|\+|/)(\s*)', '', dim_label)
+    dim_label = re.sub(r'(\s*)([0-9]+)(\s)([0-9]+)/(2|4|6|8)(\s|$|-|x|\+|/)(\s*)', '', dim_label)
+    dim_label = re.sub(r'(\s*)([0-9]+)/(2|4|6|8)(\s|$|-|x|\+|/)(\s*)', '', dim_label)
+    dim_label = re.sub(r'(\s*)([0-9]+)\.([0-9]+)(\s*)', '', dim_label)
+    dim_label = re.sub(r'(\s*)[0-9]+(\s*)', '', dim_label)
+    dim_label = dim_label.replace('-','').replace('x','').replace('/','').replace('+','')
+    dim_label = dim_label.strip().lower()
 
     # Retrieve the numeric and dimension information from the column.
-    dimension = dimension.replace('"','').replace(',','.')
-    dim_ftin = re.search(r'([0-9]+)\'([0-9]+)', dimension)
-    dim_ft = re.search(r'([0-9]+)\'', dimension)
-    dim_dec = re.search(r'([0-9]+)\.([0-9]+)', dimension)
-    dim_mixed = re.search(r'([0-9]+)(\s)([0-9]+)/([0-9]+)', dimension)
-    dim_frac = re.search(r'([0-9]+)/([0-9]+)', dimension)
-    dim_int = re.search(r'([0-9]+)', dimension)
-    dim_label = dimension
-    dim_label = re.sub(r'(\s*)([0-9]+)\.([0-9]+)(\s*)', '', dim_label)
-    dim_label = re.sub(r'(\s*)([0-9]+)\'([0-9]+)(\s*)', '', dim_label)
-    dim_label = re.sub(r'(\s*)([0-9]+)\'(\s*)', '', dim_label)
-    dim_label = re.sub(r'(\s*)([0-9]+)/([0-9]+)(\s*)', '', dim_label)
-    dim_label = re.sub(r'(\s*)[0-9]+(\s*)', '', dim_label).strip().lower()
-    if dim_ftin and dim_label in DIMS:
-        (feet, inches) = dim_ftin.group().split("'")
-        entry[DIMS[dim_label]] = (float(feet)*30.48) + (float(inches)*2.54)
-    elif dim_ft and dim_label in DIMS:
-        entry[DIMS[dim_label]] = (float(dim_ft.group()[0:-1])*30.48)
-    elif dim_mixed and (unit in ["in","po"]) and dim_label in DIMS:
-        (term, frac) = dim_mixed.group().split(" ")
-        (nom, den) = frac.split("/")
-        entry[DIMS[dim_label]] = ((float(term)*2.54) + (float(nom)*2.54 / float(den)))
-    elif dim_frac and (unit in ["in","po"]) and dim_label in DIMS:
-        (nom, den) = dim_frac.group().split("/")
-        entry[DIMS[dim_label]] = float(nom)*2.54 / float(den)
-    elif dim_int and (unit in ["in","po"]) and dim_label in DIMS:
-        entry[DIMS[dim_label]] = float(dim_int.group())*2.54
-    elif dim_int and unit == "cm" and dim_label in DIMS:
-        entry[DIMS[dim_label]] = float(dim_int.group())
-    elif dim_int and unit == "mm" and dim_label in DIMS:
-        entry[DIMS[dim_label]] = float(dim_int.group()) / 10
-    elif dim_int and unit == "m" and dim_label in DIMS:
-        entry[DIMS[dim_label]] = float(dim_int.group()) * 100
-    elif dim_int and unit == "ft" and dim_label in DIMS:
-        entry[DIMS[dim_label]] = float(dim_int.group()) * 30.48
-    elif dim_dec and unit == "cm" and dim_label in DIMS:
-        entry[DIMS[dim_label]] = float(dim_frac.group())
-    elif dim_dec and unit == "ft" and dim_label in DIMS:
-        entry[DIMS[dim_label]] = float(dim_frac.group())
-    elif unit is None or\
-         dim_label == "" or\
-         (not dim_int) or\
-         len({'x','/','-','+'} & set(dim_label)) > 0: # Ignore for now.
-        pass
+    assortment = project_geometry_dimension_matches(dimension)
+
+    # Obtain the unit column text and fix typos where
+    # it is possible or reasonable to do so.
+    unit = entry.get(unit_column)
+    if unit is not None:
+        unit = unit.replace('`','').replace(' black-brown/auli mirror','').replace('52','').replace('/st','')
+        unit = unit.lower().strip()
+    if unit is None and entry['country'] in {'se', 'de'} and set(assortment.raws()).issubset({'140', '150', '180', '200', '220', '240', '280'}):
+        unit = "cm"
+    if unit is None and entry['country'] == 'us' and set(assortment.notations()).issubset({'mixed', 'frac'}): # Mixed numbers are used exclusively to represent inches.
+        unit = "in"
+    if unit == "po" and entry['country'] in {'ca', 'fr'}:
+        unit = "in"
+    if unit == "meter":
+        unit = "m"
+
+    # Convert quantity representation match into a standard unit
+    # (centimeters) and extend the entry with this new information.
+    if assortment.set_unit(unit) and assortment:
+        if dim_label in DIMS:
+            set_or_update_op(entry, DIMS[dim_label] + '_max_cm', max, assortment.max().cm)
+            set_or_update_op(entry, DIMS[dim_label] + '_min_cm', min, assortment.min().cm)
+        set_or_update_op(entry, 'max_cm', max, assortment.max().cm)
+        set_or_update_op(entry, 'max_cm', min, assortment.min().cm)
     else:
         pass #print(dimension + " :: " + str(unit) + " :: " + str(dim_label) + " :: " + str(dim_label in DIMS) + ".")
 
 def projection_geometry(entry):
-    # Process every "default" dimension column.
+    # Process every "standard" dimension column.
     for dimension_column in ["dim" + str(i) for i in range(1,4)]:
         projection_geometry_dimension(dimension_column, "unit", entry)
 
@@ -283,7 +338,7 @@ def projections_add(input, output):
 # "data/" subdirectory path.
 #xlsx_files_to_json_file('data/', 'data.json', True)
 #xlsx_files_to_json_file('data/', 'data.json', True, ['us'], [2005])
-#projections_add("data.json", "projected.json")
+projections_add("data.json", "projected.json")
 #json_file_to_xlsx_file('projected.json', 'ikea-data.xlsx')
 
 #eof

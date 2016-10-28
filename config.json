@@ -14,7 +14,9 @@
   "dimensions": [
     "country", "year", "ikeaid", "name", "description", "price",
     "pieces", "collection", "grams", "lin_m", "sqr_m",
-    "wid_cm", "len_cm", "hgt_cm", "dep_cm", "thk_cm", "dia_cm",
+    "max_cm", "min_cm",
+    "wid_max_cm", "len_max_cm", "hgt_max_cm", "dep_max_cm", "thk_max_cm", "dia_max_cm",
+    "wid_min_cm", "len_min_cm", "hgt_min_cm", "dep_min_cm", "thk_min_cm", "dia_min_cm",
     "quantity", "dim1", "dim2", "dim3", "unit", "color",
     "other-measurement-1", "other-unit-1",
     "other-measurement-2", "other-unit-2",
@@ -24,12 +26,17 @@
   ],
   "translations": {
     "dimension_labels": {
-        "wid_cm": ["w", "i", "b", "breit",  "bbreite",  "briete", "breite", "bredd", "breed", "bred", "dredd", "larg.", "larg", "large", "largh", "largo"],
-        "len_cm": ["l", "l.", "ll", "langd", "lang", "lange", "lung", "lungo", "lungh", "lunghezza"],
-        "dep_cm": ["d", "dd", "tief", "teife", "tiefe", "t", "djup", "djupa", "p", "profond", "pro", "prof", "prof.", "proof", "peof"],
-        "hgt_cm": ["h", "hh", "hoch", "h hoch", "hcm","loch", "och", "hojd", "hohe", "hohen", "houh", "alte", "altezza", "hau", "hhaut", "haut"],
-        "thk_cm": ["thick", "hthick", "hart", "stark", "starke", "tjock", "epaisseur"],
-        "dia_cm": ["diameter"]
+        "wid": ["w", "w.", "i", "b", "breit",  "bbreite",  "briete", "breite", "beite", "beinte", "schrankbreite",
+                "bredd", "breed", "bred", "dredd", "larg.", "larg", "large", "largh", "largo"],
+        "len": ["l", "ll", "langd", "lang", "lange", "seillange", "lung", "lungo", "lungh", "lunghezza"],
+        "dep": ["d", "dd", "tief", "teife", "tiefe", "t", "djup", "djupa",
+                "p", "profond", "pro", "prof", "prof.", "proof", "peof"],
+        "hgt": ["h", "hh", "hoch", "h hoch", "hcm", "loch", "boch", "och", "hojd", "hohe", "hohen",
+                "hohenverstellbar", "hohenberstellbar", "honenverstellbar", "hohenvertellbar", "hohensverstellbar",
+                "sitzhohe", "arbeitshohe",
+                "houh", "alte", "altezza", "h regolabile", "hau", "hhaut", "haut", "assise"],
+        "thk": ["thick", "hthick", "hart", "stark", "starke", "tjock", "epaisseur"],
+        "dia": ["diameter"]
     },
     "comments": {
         "thickness": {
