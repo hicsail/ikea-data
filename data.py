@@ -110,9 +110,19 @@ def json_file_to_xlsx_file(json_file, xlsx_file):
     print("Converting data in file '" + json_file + "' to file '" + xlsx_file + "'...")
     d = json.loads(open(json_file).read())
     entries = d['entries']
+
     xl_workbook = xlsxwriter.Workbook(xlsx_file)
     xl_bold = xl_workbook.add_format({'bold': True})
+    xl_row_evn = xl_workbook.add_format({'bg_color':'#FFFFFF'})
+    xl_row_odd = xl_workbook.add_format({'bg_color':'#EAEAEA'})
+    xl_row_non = xl_workbook.add_format({'bg_color':'#FBFFD8'})
     xl_sheet = xl_workbook.add_worksheet("data")
+
+    groups = set()
+    for e in entries:
+        if 'group' in e and e['group'] is not None:
+            groups.add(e['group'])
+    group_to_index = {g:i for (g, i) in zip(sorted(list(groups)), range(0,len(groups)))}
 
     # Set the column widths.
     for (i,w) in zip(range(0,11), [2,5,10,25,18,8,4,4.5,5.5,6.5,8]):
@@ -125,9 +135,14 @@ def json_file_to_xlsx_file(json_file, xlsx_file):
     # Insert the data (all rows).
     for i in range(len(entries)):
         entry = entries[i]
+
+        fmt = xl_row_non
+        if 'group' in entry and entry['group'] is not None:
+            fmt = xl_row_evn if ((group_to_index[entry['group']])%2==0) else xl_row_odd
+
         for j in range(0,len(CONFIG['dimensions'])):
             dimension = CONFIG['dimensions'][j]
-            xl_sheet.write(i+1, j, entry.get(dimension))
+            xl_sheet.write(i+1, j, entry.get(dimension), fmt)
 
         # Progress counter.
         if i > 0 and i % 5000 == 0:
@@ -281,7 +296,7 @@ def projection_geometry_dimension(dimension_column, unit_column, entry):
             set_or_update_op(entry, DIMS[dim_label] + '_max_cm', max, assortment.max().cm)
             set_or_update_op(entry, DIMS[dim_label] + '_min_cm', min, assortment.min().cm)
         set_or_update_op(entry, 'max_cm', max, assortment.max().cm)
-        set_or_update_op(entry, 'max_cm', min, assortment.min().cm)
+        set_or_update_op(entry, 'min_cm', min, assortment.min().cm)
     else:
         pass #print(dimension + " :: " + str(unit) + " :: " + str(dim_label) + " :: " + str(dim_label in DIMS) + ".")
 
@@ -290,17 +305,14 @@ def projection_geometry(entry):
     for dimension_column in ["dim" + str(i) for i in range(1,4)]:
         projection_geometry_dimension(dimension_column, "unit", entry)
 
-    # Process the "other measurement" columns.
-    ou1 = entry.get("other-unit-1")
-    if ou1 == "diameter in":
+    # Process the "other measurement" columns for thickness or diameter.
+    if entry.get("other-unit-1") in {"diameter cm", "diameter in"}:
         entry["other-measurement-1"] = str(entry.get("other-measurement-1")) + " diameter"
-        entry["other-unit-1"] = "in"
+        entry["other-unit-1"] = entry.get("other-unit-1").replace("diameter ", "")
         projection_geometry_dimension("other-measurement-1", "other-unit-1", entry)
-    comments = entry.get("comments")
-    if comments in CONFIG['translations']['comments']['thickness']:
-        if entry.get("other-unit-1") != "diameter cm": # Filter out mistakes.
-            entry["other-measurement-1"] = str(entry.get("other-measurement-1")) + " thick"
-            projection_geometry_dimension("other-measurement-1", "other-unit-1", entry)
+    if entry.get("comments") in CONFIG['translations']['comments']['thickness']:
+        entry["other-measurement-1"] = str(entry.get("other-measurement-1")) + " thick"
+        projection_geometry_dimension("other-measurement-1", "other-unit-1", entry)
 
 def projections_add(input, output):
     print("Projecting data in file '" + input + "' to file '" + output + "'...")
@@ -308,7 +320,7 @@ def projections_add(input, output):
     entries = d['entries']
     for i in range(len(entries)):
         entry = entries[i]
-        
+
         # Remove any entries that do not have any data.
         for column in CONFIG['columns']:
             if entry.get(column) == "n/a": 
@@ -330,12 +342,70 @@ def projections_add(input, output):
     open(output, 'w').write(json.dumps(d, sort_keys=True, indent=2)) # Human-legible.
     print("...finished writing file '" + output + "'.\n")
 
-# Examples of calls to functions in this module.
-# It is assumed that the IKEA data sets are under the
-# "data/" subdirectory path.
-#xlsx_files_to_json_file('data/', 'data.json', True)
-#xlsx_files_to_json_file('data/', 'data.json', True, ['us'], [2005])
-#projections_add("data.json", "projected.json")
-#json_file_to_xlsx_file('projected.json', 'ikea-data.xlsx')
+def derive_ad_hoc_groups(input, output):
+    '''
+    Populates the data set entries with a group index
+    derived using an ad hoc clustering technique.
+    '''
+    oo = float("inf") # Infinity.
+
+    # Chebyshev metric for vectors with heterogenous types.
+    def difference(x, y):
+        if type(x)==str and type(y)==str and x==y: return 0
+        if type(x) in {int,float} and type(y) in {int,float}: return abs(x-y)
+        return oo
+    def chebyshev(p, q):
+        return max([difference(*v) for v in zip(p,q)])
+    def closest(p, qs):
+        return sorted([(chebyshev(p, qs[i]), i) for i in range(len(qs))])[0]
+
+    d = json.loads(open(input, 'r').read())
+    entries = d['entries']
+
+    # Build the index of cluster means. This is an ad hoc solution
+    # that has better performance and does not require k up-front.
+    # An off-the-shelf k-means implementation would be ideal to use.
+    points = {}  
+    print("Building index of cluster means.")
+    for e in entries:
+        if 'name' in e and 'max_cm' in e and 'min_cm' in e:
+            name = e.get('name')
+            p = (name, e['max_cm'], e['min_cm'])
+            if not name in points:
+                points[name] = [p]
+            else:
+                (dist, i) = closest(p, points[name])
+                if dist < 3:
+                    q = points[name][i]
+                    points[name][i] = (p[0], (p[1]+q[1])/2, (p[2]+q[2])/2)
+                else:
+                    points[name].append(p)
+
+    # Populate the entries with their corresponding group indices.
+    print("Populating entries with their corresponding group indices.")
+    for e in entries:
+        if 'name' in e and 'max_cm' in e and 'min_cm' in e:
+            name = e.get('name')
+            (dist, i) = closest((name, e['max_cm'], e['min_cm']), points[name])
+            if dist < 3:
+                e['group'] = "_".join([str(x) for x in points[name][i]])
+
+    open(output, 'w').write(json.dumps(d, sort_keys=True, indent=2)) # Human-legible.
+
+def example():
+    '''
+    Examples of calls to functions in this module.
+    It is assumed that the IKEA data sets are under the
+    "data/" subdirectory path. This sequence converts the
+    original data sets into the final spreadsheet of
+    projected and clustered results.
+    '''
+    xlsx_files_to_json_file('data/', 'data.json', True)
+    #xlsx_files_to_json_file('data/', 'data.json', True, ['us'], [2005])
+    projections_add("data.json", "projected.json")
+    #json_file_to_xlsx_file('projected.json', 'ikea-data.xlsx')
+
+    derive_ad_hoc_groups('projected.json', 'grouped.json')
+    json_file_to_xlsx_file('grouped.json', 'grouped.xlsx')
 
 #eof
