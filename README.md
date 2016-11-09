@@ -5,7 +5,7 @@ Scripts for manipulating data sets containing products and corresponding prices 
 
 The root directory contains scripts for managing the legacy and latest processed versions of the data set:
 * `config.json` specifies the format of the legacy data, as well as additional information for the projections defined in the scripts;
-* `measurement.py` provides a helper class for creating and working with normalized measurements along dimensions found in the data; and
+* `measurements.py` provides a helper class for creating and working with normalized measurements along dimensions found in the data; and
 * `data.py` provides a number of functionalities:
  * converting a legacy data set into JSON format,
  * converting a JSON-format data set into a Microsoft Excel format,
