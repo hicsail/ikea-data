@@ -186,31 +186,22 @@ def projection_product_unit_quantity(entry):
         elif quantity in PULS['collection']: entry["collection"] = True
         #else: print(quantity, label)
 
-def project_geometry_dimension_matches(dimension):
+def project_geometry_dimension_matches(patterns, dimension):
     '''
     Retrieve all numeric values from a string that
     match one of the specified formats. Finds each
     longest match from left to right.
     '''
-    patterns = [\
-        ('prime_double_prime', r'([0-9]+)\'(\s*)([0-9]+)(\")?'),
-        ('prime', r'([0-9]+)\''),
-        ('decimal_mixed', r'([0-9]+)\.([0-9]+)(\s)([0-9]+)/(2|4|6|8)(\s|$|-|x|\+|/)'),
-        ('mixed', r'([0-9]+)(\s)([0-9]+)/(2|4|6|8)(\s|$|-|x|\+|/)'),
-        ('fraction', r'([0-9]+)/(2|4|6|8)(\s|$|-|x|\+|/)'),
-        ('decimal', r'([0-9]+)\.([0-9]+)'),
-        ('integer', r'([0-9]+)')
-      ]
-
-    # Keep finding matches left-to-right until there are no more.
     suffix = dimension
     assortment = Assortment()
+
+    # Keep finding matches left-to-right until there are no more.
     match = True
     while match:
         # Find the longest match.
         match = None
         length = 0
-        for (notation, regexp) in patterns:
+        for [notation, regexp] in patterns:
             result = re.search(regexp, suffix)
             if result:
                 raw = result.group()
@@ -224,70 +215,73 @@ def project_geometry_dimension_matches(dimension):
 
     return assortment
 
-def projection_geometry_dimension(dimension_column, unit_column, entry):
+def projection_geometry_dimension_normalize(country, dimension):
     '''
-    Extract labelled dimension measurement information from a
-    given combination of a dimension column and a unit
-    column.
+    Fix typos and normalize formatting for dimension column value.
     '''
-    # Build lookup table for translating dimension labels.
-    DIMS = {TXT:DIM for (DIM, LBLS) in CONFIG['translations']['dimension_labels'].items() for TXT in LBLS}
-
-    # Retrieve the dimension column value, fix typos, and
-    # perform some formatting normalizations.
-    dimension = entry.get(dimension_column)
     if dimension is None or dimension == "":
-        return None
+        return (None, None)
     if type(dimension) == int or type(dimension) == float:
         dimension = str(dimension)
     if type(dimension) == str:
-        dimension = dimension.replace('`','')
-        dimension = dimension.replace('h263/4', 'h26 3/4')\
-                             .replace('h551/8', 'h55 1/8')\
-                             .replace("l9' 10'", "l9'-10'")\
-                             .replace("44. 5/62", "44 5/62")\
-                             .replace("l220, l56.5", "l220-l56.5")
+        for [typo, fix] in CONFIG['corrections']['dimension']:
+            dimension = dimension.replace(typo, fix)
         dimension = dimension.lower().strip()
         dimension = dimension[:-1] if dimension[-1] == '.' else dimension
 
         # Adjust for comma instead of decimal point in some cases.
-        if entry['country'] in {'de','se','it','fr'} and dimension.count(',') == 1:
+        if country in {'de','se','it','fr'} and dimension.count(',') == 1:
             dimension = dimension.replace(',','.')
 
         # Adjust for comma instead of separator in some cases.
-        if entry['country'] in {'ca','fr'} and dimension.count(',') in {1,2}:
+        if country in {'ca','fr'} and dimension.count(',') in {1,2}:
             dimension = dimension.replace(',','-')
 
     # Clear out all numeric information from the dimension string
     # (leaving only the label, if one is present).
     dim_label = dimension
-    dim_label = re.sub(r'(\s*)([0-9]+)\'(\s*)([0-9]+)(\")?(\s*)', '', dim_label)
-    dim_label = re.sub(r'(\s*)([0-9]+)\'(\s*)', '', dim_label)
-    dim_label = re.sub(r'(\s*)([0-9]+)\.([0-9]+)(\s)([0-9]+)/(2|4|6|8)(\s|$|-|x|\+|/)(\s*)', '', dim_label)
-    dim_label = re.sub(r'(\s*)([0-9]+)(\s)([0-9]+)/(2|4|6|8)(\s|$|-|x|\+|/)(\s*)', '', dim_label)
-    dim_label = re.sub(r'(\s*)([0-9]+)/(2|4|6|8)(\s|$|-|x|\+|/)(\s*)', '', dim_label)
-    dim_label = re.sub(r'(\s*)([0-9]+)\.([0-9]+)(\s*)', '', dim_label)
-    dim_label = re.sub(r'(\s*)[0-9]+(\s*)', '', dim_label)
+    for [notation, regexp] in CONFIG['numerical']:
+        dim_label = re.sub(r'(\s*)' + regexp + r'(\s*)', '', dim_label)
     dim_label = dim_label.replace('-','').replace('x','').replace('/','').replace('+','')
     dim_label = dim_label.strip().lower()
 
-    # Retrieve the numeric and dimension information from the column.
-    assortment = project_geometry_dimension_matches(dimension)
+    return (dimension, dim_label)
 
-    # Obtain the unit column text and fix typos where
-    # it is possible or reasonable to do so.
-    unit = entry.get(unit_column)
+def projection_geometry_dimension_unit_normalize(country, assortment, unit):
+    '''
+    Fix typos and normalize formatting for units portion
+    of dimension column value.
+    '''
+    if unit is None and country in {'se', 'de'} and set(assortment.raws()).issubset({'140', '150', '180', '200', '220', '240', '280'}):
+        return "cm"
+    if unit is None and country == 'us' and set(assortment.notations()).issubset({'mixed', 'frac'}): # Mixed numbers are used exclusively to represent inches.
+        return "in"
     if unit is not None:
-        unit = unit.replace('`','').replace(' black-brown/auli mirror','').replace('52','').replace('/st','')
+        for [typo, fix] in CONFIG['corrections']['unit']:
+            unit = unit.replace(typo, fix)
         unit = unit.lower().strip()
-    if unit is None and entry['country'] in {'se', 'de'} and set(assortment.raws()).issubset({'140', '150', '180', '200', '220', '240', '280'}):
-        unit = "cm"
-    if unit is None and entry['country'] == 'us' and set(assortment.notations()).issubset({'mixed', 'frac'}): # Mixed numbers are used exclusively to represent inches.
-        unit = "in"
-    if unit == "po" and entry['country'] in {'ca', 'fr'}:
-        unit = "in"
-    if unit == "meter":
-        unit = "m"
+        unit = "in" if unit == "po" and country in {'ca', 'fr'} else unit
+        unit = "m" if unit == "meter" else unit
+        return unit
+
+def projection_geometry_dimension(dimension_column, unit_column, entry):
+    '''
+    Extract labelled dimension measurement information from a
+    given combination of a dimension column and a unit column.
+    '''
+    # Build lookup table for translating dimension labels.
+    DIMS = {TXT:DIM for (DIM, LBLS) in CONFIG['translations']['dimension_labels'].items() for TXT in LBLS}
+
+    # Retrieve the fixed/normalized dimension column value.
+    (dimension, dim_label) = projection_geometry_dimension_normalize(entry['country'], entry.get(dimension_column))
+    if dimension is None:
+        return None
+
+    # Retrieve the numeric and dimension information from the column.
+    assortment = project_geometry_dimension_matches(CONFIG['numerical'], dimension)
+
+    # Obtain the unit column text and fix typos where possible/reasonable.
+    unit = projection_geometry_dimension_unit_normalize(entry['country'], assortment, entry.get(unit_column))
 
     # Convert quantity representation match into a standard unit
     # (centimeters) and extend the entry with this new information.

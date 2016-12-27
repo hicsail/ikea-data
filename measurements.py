@@ -2,7 +2,7 @@
 ## 
 ## measurements.py
 ##
-##   Class for working with individual measurements, measurement ranges, and
+##   Classes for working with individual measurements, measurement ranges, and
 ##   measurement collections.
 ##
 ##
