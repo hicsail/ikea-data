@@ -9,5 +9,6 @@ The root directory contains scripts for managing the legacy and latest processed
 * `data.py` provides a number of functionalities:
  * converting a legacy data set into JSON format,
  * converting a JSON-format data set into a Microsoft Excel format,
+ * generating a JSON-format color translation file,
  * computing the projection of a data set with normalized field values for geometry dimensions, and
  * clustering a data set using an ad hoc approach based on a Chebyshev metric.

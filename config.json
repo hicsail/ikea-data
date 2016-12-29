@@ -48,7 +48,19 @@
       [" black-brown/auli mirror", ""],
       ["52", ""],
       ["/st",""]
-    ]
+    ],
+    "colors": {
+      "it": {
+        "nerp": "nero",
+        "accciaio": "acciaio"
+      },
+      "de": {
+        "nussbaumnachb": "nussbaumnachbildung"
+      },
+      "se": {
+        "bokfaner": "borkfaner"
+      }
+    }
   },
   "translations": {
     "dimension_labels": {

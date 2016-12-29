@@ -14,8 +14,9 @@ import xlrd
 import xlrd.sheet
 import xlsxwriter
 import re
+from collections import defaultdict
 
-from measurements import Measurement, Assortment
+from measurements import Measurement, Assortment # Project-specific package.
 
 ###############################################################################
 ##
@@ -336,6 +337,80 @@ def projections_add(input, output):
     open(output, 'w').write(json.dumps(d, sort_keys=True, indent=2)) # Human-legible.
     print("...finished writing file '" + output + "'.\n")
 
+def color_normalize(color):
+    return color.replace('   ',' ').replace('  ',' ').lower().strip()
+
+def json_to_color_map(input, output):
+    data = json.loads(open(input, 'r').read())
+    by_ikeaid_year_country = {}
+    for entry in data['entries']:
+        (ikeaid, year, country) = (entry.get('ikeaid'), str(entry.get('year')), entry.get('country'))
+        if ikeaid is not None and ikeaid != "n/a" and entry.get("color") != "n/a":
+            color = entry.get("color")
+            if country in {'us','uk','ca'}:
+                color = color\
+                  .replace(' and ', ' & ')\
+                  .replace(', in', ' in')\
+                  .replace(', ', ' & ')\
+                  .replace('/', ' & ')\
+                  .replace('& &', '&')\
+                  .replace('-', ' ')\
+                  .replace('vera', 'vara')\
+                  .replace('colour', 'color')\
+                  .replace('multi ', 'multi')\
+                  .replace('fibres', 'fibers')\
+                  .replace('grey', 'gray')\
+                  .replace('galvanised', 'galvanized')\
+                  .replace('banaba', 'banana')\
+                  .replace('ricepaper', 'rice paper')\
+                  .replace('patters', 'patterns')\
+                  .replace('flowers', 'flower')\
+                  .replace('aluminium', 'aluminum')\
+                  .replace('multicolored', 'multicolor')\
+                  .strip()
+            color = color_normalize(color)
+            by_ikeaid_year_country.setdefault(ikeaid, {})
+            by_ikeaid_year_country[ikeaid].setdefault(year, {})
+            by_ikeaid_year_country[ikeaid][year].setdefault(country, [])
+            by_ikeaid_year_country[ikeaid][year][country].append(color)
+
+    clusters = set()
+    for ikeaid in by_ikeaid_year_country:
+        for year in by_ikeaid_year_country[ikeaid]:
+            by_country = by_ikeaid_year_country[ikeaid][year]
+            if len(by_country) == 7:
+                if None not in [by_country[c][0] for c in by_country]:
+                    clusters.add(tuple([(c, str_ascii_only(by_country[c][0])) for c in by_country]))
+
+    color_to_clusters = {}
+    for cluster in clusters:
+        for (country, color) in cluster:
+            if     country not in {'us', 'uk', 'ca'}\
+               and not "/" in color\
+               and not "," in color\
+               and not "." in color\
+               and not " e " in color\
+               and not " and " in color\
+               and not " oder " in color\
+               and not " und " in color\
+               and not " et " in color\
+              :
+                color = color.replace('-', ' ')
+                color_to_clusters.setdefault((country, color), [])
+                color_to_clusters[(country, color)].extend([col for (cntry, col) in cluster if cntry in {'us','uk'}])
+
+    country_color_to_clusters = {}
+    for (country, color) in color_to_clusters:
+        freqs = defaultdict(int)
+        for translation in color_to_clusters[(country, color)]:
+           freqs[translation] += 1
+        country_color_to_clusters.setdefault(country, {})
+        country_color_to_clusters[country][color] = list(reversed([[t, f] for (f, t) in sorted([(freqs[t], t) for t in freqs])]))
+
+    raw = json.dumps(country_color_to_clusters, sort_keys=True, indent=2) # Human-legible.
+    raw = raw.replace(",\n        ", ", ").replace("[\n        ", "[").replace("\n      ]", "]")
+    open(output, 'w').write(raw)
+
 def derive_ad_hoc_groups(input, output):
     '''
     Populates the data set entries with a group index
@@ -396,6 +471,7 @@ def example():
     '''
     xlsx_files_to_json_file('data/', 'data.json', True)
     #xlsx_files_to_json_file('data/', 'data.json', True, ['us'], [2005])
+    json_to_color_map("data.json", "colors.json")
     projections_add("data.json", "projected.json")
     #json_file_to_xlsx_file('projected.json', 'ikea-data.xlsx')
 
