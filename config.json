@@ -50,6 +50,20 @@
       ["/st",""]
     ],
     "colors": {
+      "en": [
+        ["vera", "vara"],
+        ["colour", "color"],
+        ["multi ", "multi"],
+        ["fibres", "fibers"],
+        ["grey", "gray"],
+        ["galvanised", "galvanized"],
+        ["banaba", "banana"],
+        ["ricepaper", "rice paper"],
+        ["patters", "patterns"],
+        ["flowers", "flower"],
+        ["aluminium", "aluminum"],
+        ["multicolored", "multicolor"]
+      ],
       "it": {
         "nerp": "nero",
         "accciaio": "acciaio"

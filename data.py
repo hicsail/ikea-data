@@ -338,11 +338,20 @@ def projections_add(input, output):
     print("...finished writing file '" + output + "'.\n")
 
 def color_normalize(color):
-    return color.replace('   ',' ').replace('  ',' ').lower().strip()
+    return color.replace('   ',' ').replace('  ',' ')\
+                .replace('@', ' ')\
+                .lower().strip()
 
 def json_to_color_map(input, output):
+    '''
+    Create a color translation mapping using only those entries
+    that have ikeaid information and have color information
+    corresponding to every country in the same year.
+    '''
     data = json.loads(open(input, 'r').read())
-    by_ikeaid_year_country = {}
+
+    # Build mapping from ikeaid, year, and country to a color.
+    ikeaid_year_country_to_color = {}
     for entry in data['entries']:
         (ikeaid, year, country) = (entry.get('ikeaid'), str(entry.get('year')), entry.get('country'))
         if ikeaid is not None and ikeaid != "n/a" and entry.get("color") != "n/a":
@@ -355,37 +364,31 @@ def json_to_color_map(input, output):
                   .replace('/', ' & ')\
                   .replace('& &', '&')\
                   .replace('-', ' ')\
-                  .replace('vera', 'vara')\
-                  .replace('colour', 'color')\
-                  .replace('multi ', 'multi')\
-                  .replace('fibres', 'fibers')\
-                  .replace('grey', 'gray')\
-                  .replace('galvanised', 'galvanized')\
-                  .replace('banaba', 'banana')\
-                  .replace('ricepaper', 'rice paper')\
-                  .replace('patters', 'patterns')\
-                  .replace('flowers', 'flower')\
-                  .replace('aluminium', 'aluminum')\
-                  .replace('multicolored', 'multicolor')\
                   .strip()
+                for (text, fix) in CONFIG['corrections']['colors']['en']:
+                    color = color.replace(text, fix)
             color = color_normalize(color)
-            by_ikeaid_year_country.setdefault(ikeaid, {})
-            by_ikeaid_year_country[ikeaid].setdefault(year, {})
-            by_ikeaid_year_country[ikeaid][year].setdefault(country, [])
-            by_ikeaid_year_country[ikeaid][year][country].append(color)
+            ikeaid_year_country_to_color.setdefault(ikeaid, {})
+            ikeaid_year_country_to_color[ikeaid].setdefault(year, {})
+            ikeaid_year_country_to_color[ikeaid][year].setdefault(country, [])
+            ikeaid_year_country_to_color[ikeaid][year][country].append(color)
 
-    clusters = set()
-    for ikeaid in by_ikeaid_year_country:
-        for year in by_ikeaid_year_country[ikeaid]:
-            by_country = by_ikeaid_year_country[ikeaid][year]
+    # Build all ensembles of seven colors (one from each country)
+    # for every (ikeaid, year) pair.
+    ensembles = set()
+    for ikeaid in ikeaid_year_country_to_color:
+        for year in ikeaid_year_country_to_color[ikeaid]:
+            by_country = ikeaid_year_country_to_color[ikeaid][year]
             if len(by_country) == 7:
                 if None not in [by_country[c][0] for c in by_country]:
-                    clusters.add(tuple([(c, str_ascii_only(by_country[c][0])) for c in by_country]))
+                    ensembles.add(tuple([(c, str_ascii_only(by_country[c][0])) for c in by_country]))
 
-    color_to_clusters = {}
-    for cluster in clusters:
-        for (country, color) in cluster:
-            if     country not in {'us', 'uk', 'ca'}\
+    # Build mapping from country and color to a set of corresponding
+    # translations in English (avoiding conjunctions of phrases).
+    country_color_to_translation = {}
+    for ensemble in ensembles:
+        for (country, color) in ensemble:
+            if     country not in {'us','uk','ca'}\
                and not "/" in color\
                and not "," in color\
                and not "." in color\
@@ -396,18 +399,22 @@ def json_to_color_map(input, output):
                and not " et " in color\
               :
                 color = color.replace('-', ' ')
-                color_to_clusters.setdefault((country, color), [])
-                color_to_clusters[(country, color)].extend([col for (cntry, col) in cluster if cntry in {'us','uk'}])
+                country_color_to_translation.setdefault((country, color), [])
+                country_color_to_translation[(country, color)].extend([col for (cntry, col) in ensemble if cntry in {'us','uk'}])
 
-    country_color_to_clusters = {}
-    for (country, color) in color_to_clusters:
+    # Build mapping from countries and colors to English translation frequencies,
+    # also incorporating web translations (under the "infinity" frequency).
+    web_translations = json.loads(open('colors.translations.json', 'r').read())
+    country_color_to_ensembles = {}
+    for (country, color) in country_color_to_translation:
         freqs = defaultdict(int)
-        for translation in color_to_clusters[(country, color)]:
+        freqs[web_translations[country][color_normalize(color)]] = float('inf')
+        for translation in country_color_to_translation[(country, color)]:
            freqs[translation] += 1
-        country_color_to_clusters.setdefault(country, {})
-        country_color_to_clusters[country][color] = list(reversed([[t, f] for (f, t) in sorted([(freqs[t], t) for t in freqs])]))
+        country_color_to_ensembles.setdefault(country, {})
+        country_color_to_ensembles[country][color] = list(reversed([[t, f] for (f, t) in sorted([(freqs[t], t) for t in freqs])]))
 
-    raw = json.dumps(country_color_to_clusters, sort_keys=True, indent=2) # Human-legible.
+    raw = json.dumps(country_color_to_ensembles, sort_keys=True, indent=2) # Human-legible.
     raw = raw.replace(",\n        ", ", ").replace("[\n        ", "[").replace("\n      ]", "]")
     open(output, 'w').write(raw)
 
